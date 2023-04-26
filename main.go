@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"websocket-pool/routers"
 
 	"websocket-pool/pkg/config"
@@ -40,7 +41,7 @@ func initConfig() {
 }
 
 func initRedis() {
-
+	fmt.Print("eee")
 }
 
 func initLog() {
