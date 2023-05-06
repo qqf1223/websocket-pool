@@ -14,3 +14,9 @@ var (
 func init() {
 
 }
+
+const (
+	CtxKeyXSendID     = "sendID"
+	CtxKeyXToken      = "token"
+	CtxKeyXPlatformID = "platformID"
+)

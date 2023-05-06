@@ -9,7 +9,6 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/spf13/cast"
-	"go.uber.org/zap"
 )
 
 var (
@@ -37,13 +36,13 @@ func NewConfig() *Config {
 		Port:        global.GVA_CONFIG.REDIS.Port,
 		Password:    global.GVA_CONFIG.REDIS.Pass,
 		Database:    global.GVA_CONFIG.REDIS.Database,
-		Timeout:     time.Duration(global.GVA_CONFIG.REDIS.Timeout),
+		Timeout:     time.Duration(global.GVA_CONFIG.REDIS.Timeout) * time.Second,
 		MaxIdle:     global.GVA_CONFIG.REDIS.MaxIdle,
 		MaxActive:   global.GVA_CONFIG.REDIS.MaxActive,
-		IdleTimeout: time.Duration(global.GVA_CONFIG.REDIS.IdleTimeout),
+		IdleTimeout: time.Duration(global.GVA_CONFIG.REDIS.IdleTimeout) * time.Second,
 		TlsConfig:   &tls.Config{},
-		UseTLS:      false,
-		SkipVerify:  false,
+		UseTLS:      global.GVA_CONFIG.REDIS.UseTLS,
+		SkipVerify:  global.GVA_CONFIG.REDIS.SkipVerify,
 	}
 }
 
@@ -62,13 +61,22 @@ func initRedisPool(c *Config) {
 
 	redisClient = &redis.Pool{
 		Dial: func() (conn redis.Conn, err error) {
-			conn, err = redis.Dial("tcp", redisHost, redis.DialPassword(redisPass), redis.DialDatabase(redisDB), redis.DialConnectTimeout(timeout), redis.DialReadTimeout(timeout), redis.DialWriteTimeout(timeout), redis.DialTLSConfig(c.TlsConfig))
+			conn, err = redis.Dial(
+				"tcp",
+				redisHost,
+				redis.DialPassword(redisPass),
+				redis.DialDatabase(redisDB),
+				redis.DialConnectTimeout(timeout),
+				redis.DialReadTimeout(timeout),
+				redis.DialWriteTimeout(timeout),
+				redis.DialTLSConfig(c.TlsConfig),
+			)
 			return
 		},
 		MaxIdle:     c.MaxIdle,
 		MaxActive:   c.MaxActive,
 		IdleTimeout: c.IdleTimeout,
-		Wait:        true,
+		// Wait:        true,
 	}
 }
 
@@ -81,10 +89,6 @@ func getConn() (redis.Conn, error) {
 }
 
 func DoWithContext(ctx context.Context, commandName string, args ...interface{}) (reply interface{}, err error) {
-	defer func() {
-		global.GVA_LOG.Info("DoWithContext", zap.String("cmd", commandName), zap.Any("args", args), zap.Bool("isNil", err == redis.ErrNil))
-	}()
-
 	conn, err := getConn()
 	defer func() {
 		if conn != nil {

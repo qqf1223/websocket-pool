@@ -13,7 +13,7 @@ import (
 type ClientManager struct {
 	Clients     map[*Client]bool   // 全部的连接
 	ClientsLock sync.RWMutex       // 读写锁
-	ClientCount int64              // 客户端统计
+	ClientCount int64              // 本地客户端统计
 	Users       map[string]*Client // 登录的用户 // appId+uuid
 	UserLock    sync.RWMutex       // 读写锁
 	Register    chan *Client       // 连接连接处理
@@ -50,6 +50,7 @@ func (cm *ClientManager) AddClients(c *Client) {
 	if _, ok := cm.Clients[c]; !ok {
 		cm.Clients[c] = true
 		cm.ClientCount++
+		gredis.DoWithContext(context.Background(), "INCR", "clientCount")
 	}
 }
 
@@ -57,10 +58,16 @@ func (cm *ClientManager) AddClients(c *Client) {
 func (cm *ClientManager) DelClients(client *Client) {
 	cm.ClientsLock.Lock()
 	defer cm.ClientsLock.Unlock()
+	defer func() {
+		if e := recover(); e != nil {
+			return
+		}
+	}()
 
 	if _, ok := cm.Clients[client]; ok {
 		delete(cm.Clients, client)
-		gredis.DoWithContext(context.Background(), "INCR", "clientCount", 1)
+		cm.ClientCount--
+		gredis.DoWithContext(context.Background(), "DECR", "clientCount")
 	}
 	// ToDo 清除用户连接
 

@@ -10,6 +10,7 @@ type Config struct {
 	System System `mapstructure:"system" json:"system" yaml:"system"`
 	Zap    Zap    `mapstructure:"zap" json:"zap" yaml:"zap"`
 	WS     WS     `mapstructure:"websocket" json:"websocket" yaml:"websocket"`
+	Rpc    Rpc    `mapstructure:"rpc" json:"rpc" yaml:"rpc"`
 	REDIS  REDIS  `mapstructure:"redis" json:"redis" yaml:"redis"`
 }
 type System struct {
@@ -23,11 +24,14 @@ type WS struct {
 	MaxMsgLen  int    `mapstructure:"maxMsgLen" json:"maxMsgLen" yaml:"maxMsgLen"`
 	MaxConnNum int    `mapstructure:"maxConnNum" json:"maxConnNum" yaml:"maxConnNum"`
 }
+type Rpc struct {
+	Host string `mapstructure:"host" json:"host" yaml:"host"`
+}
 
 type REDIS struct {
 	Host        string `mapstructure:"host" json:"host" yaml:"host"`
 	Port        int    `mapstructure:"port" json:"port" yaml:"port"`
-	Pass        string `mapstructure:"pass" json:"pass" yaml:"pass"`
+	Pass        string `mapstructure:"password" json:"password" yaml:"password"`
 	Database    int    `mapstructure:"database" json:"database" yaml:"database"`
 	MaxIdle     int    `mapstructure:"maxIdle" json:"maxIdle" yaml:"maxIdle"`
 	MaxActive   int    `mapstructure:"maxActive" json:"maxActive" yaml:"maxActive"`

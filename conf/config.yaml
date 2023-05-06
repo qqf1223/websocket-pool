@@ -1,19 +1,23 @@
 system:
   env: 'develop'
+  forwardingRule: 'rpc'
 websocket:
   addr: 127.0.0.1
   port: 8080
   timeout: 30
   maxConnNum: 10000
   maxMsgLen: 4096
+rpc:
+  host: ':9000'
 redis:
-  host: 127.0.0.1
-  port: 6739
-  pass: 
+  host: '127.0.0.1'
+  port: 6379
+  password: ''
   database: 0
-  maxIdle: 10
-  maxActive: 50
+  maxIdle: 16
+  maxActive: 10000
   idleTimeout: 300
+  timeout: 300
   useTls: false
   skipVerify: true
 

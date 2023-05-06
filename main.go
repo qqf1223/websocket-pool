@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"websocket-pool/internal/rpc"
+	"websocket-pool/protobuf"
 	"websocket-pool/routers"
 
 	"websocket-pool/pkg/config"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -25,7 +27,6 @@ func main() {
 	initLog()
 
 	srvs.BindBeforeHandler(func() error {
-
 		// 初始化redis
 		initRedis()
 		return nil
@@ -35,8 +36,18 @@ func main() {
 	// 路由初始化
 	engine := gin.Default()
 	routers.Init(engine)
-
+	// websocket server init
 	srvs.BindServer(server.Ws.Init(engine))
+	// rpc server init
+	srvs.BindServer(&server.GRPCServer{
+		Name:        "Tool",
+		Addr:        global.GVA_CONFIG.Rpc.Host,
+		ServiceOpts: []grpc.ServerOption{},
+		RegisterFn: func(srv *grpc.Server) {
+			protobuf.RegisterWsServerServer(srv, new(rpc.WsService))
+		},
+	})
+	// srvs.BindServer(server.Rpc.Init(engine))
 	srvs.Run()
 }
 
@@ -48,7 +59,6 @@ func initConfig() {
 
 func initRedis() error {
 	gredis.Init(gredis.NewConfig())
-	fmt.Printf("redis pool init success\n")
 	return nil
 }
 
@@ -57,3 +67,5 @@ func initLog() {
 	global.GVA_LOG = log.InitLogger()
 	zap.ReplaceGlobals(global.GVA_LOG)
 }
+
+// go generate

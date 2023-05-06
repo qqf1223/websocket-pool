@@ -63,24 +63,27 @@ func (ws *WsServer) Run() error {
 }
 
 func (ws *WsServer) WebsocketEntry(ctx *gin.Context) {
+	ws.headerCheck(ctx)
 	conn, err := ws.upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		// handler error
+		global.GVA_LOG.Error("connect error", zap.Error(err))
 		return
 	} else {
 		newClient := client.NewClient(conn, conn.RemoteAddr().String())
 		clientManager.Register <- newClient
-		go ws.readMsg(newClient)
+		go ws.readMsg(ctx, newClient)
 		// go ws.writeMsg()
 	}
 
 }
 
-func (ws *WsServer) readMsg(c *client.Client) {
+func (ws *WsServer) readMsg(ctx *gin.Context, c *client.Client) {
 	for {
+		token := ctx.GetHeader("token")
+		fmt.Println(token)
 		messageType, msg, err := c.Conn.ReadMessage()
 		if err != nil {
-			//log
 			global.GVA_LOG.Error("ws readMsg error ", zap.String("userIP", c.Addr), zap.Error(err))
 			ws.delClientConn(c)
 			return
@@ -90,7 +93,6 @@ func (ws *WsServer) readMsg(c *client.Client) {
 			return
 		}
 		if messageType == websocket.CloseMessage {
-			// log
 			global.GVA_LOG.Info("close message")
 			ws.delClientConn(c)
 			return
@@ -130,4 +132,12 @@ func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
 	}
 
 	ws.writeMsg(c, websocket.TextMessage, result)
+}
+
+func (ws *WsServer) headerCheck(ctx *gin.Context) {
+	token, _ := ctx.GetQuery("token")
+	sendID, _ := ctx.GetQuery("sendID")
+
+	fmt.Println(token)
+	fmt.Println(sendID)
 }
