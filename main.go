@@ -1,7 +1,6 @@
 package main
 
 import (
-	"websocket-pool/internal/rpc"
 	"websocket-pool/protobuf"
 	"websocket-pool/routers"
 
@@ -44,7 +43,7 @@ func main() {
 		Addr:        global.GVA_CONFIG.Rpc.Host,
 		ServiceOpts: []grpc.ServerOption{},
 		RegisterFn: func(srv *grpc.Server) {
-			protobuf.RegisterWsServerServer(srv, new(rpc.WsService))
+			protobuf.RegisterWsServerServer(srv, nil)
 		},
 	})
 	// srvs.BindServer(server.Rpc.Init(engine))
