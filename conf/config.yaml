@@ -1,3 +1,5 @@
+system:
+  env: 'develop'
 websocket:
   addr: 127.0.0.1
   port: 8080
@@ -8,3 +10,20 @@ redis:
   host: 127.0.0.1
   port: 6739
   pass: 
+  database: 0
+  maxIdle: 10
+  maxActive: 50
+  idleTimeout: 300
+  useTls: false
+  skipVerify: true
+
+zap:
+  level: 'info'
+  prefix: '[websocket-pool]'
+  format: 'json'
+  director: 'log'
+  encode-level: 'LowercaseColorLevelEncoder'
+  stacktrace-key: 'stacktrace'
+  max-age: 30 # 默认日志留存默认以天为单位
+  show-line: true
+  log-in-console: true

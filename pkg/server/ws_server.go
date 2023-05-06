@@ -1,23 +1,23 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
+	"websocket-pool/entity"
 	"websocket-pool/global"
+	"websocket-pool/pkg/client"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/spf13/cast"
+	"go.uber.org/zap"
 )
 
-var userConn uint64
+var clientManager = client.NewClientManager()
 
-type UserConn struct {
-	*websocket.Conn
-}
 type WsServer struct {
 	handler    http.Handler
 	addr       string
@@ -36,8 +36,10 @@ func (ws *WsServer) Init(engine *gin.Engine) *WsServer {
 	ws.upGrader = &websocket.Upgrader{
 		HandshakeTimeout: time.Duration(global.GVA_CONFIG.WS.Timeout) * time.Second,
 		ReadBufferSize:   global.GVA_CONFIG.WS.MaxMsgLen,
+		WriteBufferSize:  global.GVA_CONFIG.WS.MaxMsgLen,
+		WriteBufferPool:  nil,
 		CheckOrigin: func(r *http.Request) bool {
-			return true
+			return r.Method == http.MethodGet
 		},
 		EnableCompression: false,
 	}
@@ -49,11 +51,14 @@ func (ws *WsServer) Run() error {
 		Addr:    ws.addr,
 		Handler: ws.handler,
 	}
+	// 开启客户端连接管理
+	go clientManager.Start()
+	global.GVA_LOG.Info(fmt.Sprintf("websocket server start sucess.listen:%s", ws.addr))
 	err := srv.ListenAndServe() //Start listening
 	if err != nil {
 		return fmt.Errorf("Ws listening err: %s" + err.Error())
 	}
-	log.Printf("[INFO] ws server start, listen: %s\n", ws.addr)
+
 	return nil
 }
 
@@ -63,40 +68,66 @@ func (ws *WsServer) WebsocketEntry(ctx *gin.Context) {
 		// handler error
 		return
 	} else {
-		newConn := &UserConn{
-			Conn: conn,
+		newClient := client.NewClient(conn, conn.RemoteAddr().String())
+		clientManager.Register <- newClient
+		go ws.readMsg(newClient)
+		// go ws.writeMsg()
+	}
+
+}
+
+func (ws *WsServer) readMsg(c *client.Client) {
+	for {
+		messageType, msg, err := c.Conn.ReadMessage()
+		if err != nil {
+			//log
+			global.GVA_LOG.Error("ws readMsg error ", zap.String("userIP", c.Addr), zap.Error(err))
+			ws.delClientConn(c)
+			return
 		}
-		go ws.readMsg(newConn)
-	}
+		if messageType == websocket.PingMessage {
+			global.GVA_LOG.Info("recive ping message")
+			return
+		}
+		if messageType == websocket.CloseMessage {
+			// log
+			global.GVA_LOG.Info("close message")
+			ws.delClientConn(c)
+			return
+		}
 
+		ws.msgParse(c, msg)
+	}
 }
 
-func (ws *WsServer) readMsg(conn *UserConn) {
-	messageType, msg, err := conn.ReadMessage()
+func (ws *WsServer) writeMsg(c *client.Client, t int, msg []byte) {
+
+	c.Conn.WriteMessage(t, msg)
+}
+
+func (ws *WsServer) delClientConn(c *client.Client) {
+	err := c.Conn.Close()
 	if err != nil {
-		//log
-		userConn--
-		ws.delUserConn(conn)
-		return
-
-	}
-	if messageType == websocket.PingMessage {
-		// log
-	}
-	if messageType == websocket.CloseMessage {
-		// log
-		userConn--
-		ws.delUserConn(conn)
+		global.GVA_LOG.Error("close err", zap.Error(err))
 		return
 	}
-
-	ws.msgParse(conn, msg)
+	clientManager.UnRegister <- c
 }
 
-func (ws *WsServer) delUserConn(conn *UserConn) {
+func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
+	global.GVA_LOG.Info("receive message", zap.String("msg", cast.ToString(msg)))
+	req := &entity.Req{}
+	err := json.Unmarshal(msg, req)
+	if err != nil {
+		global.GVA_LOG.Error("json Unmarshal req msg error", zap.Error(err))
+		return
+	}
+	resp := &entity.Resp{}
+	result, err := json.Marshal(resp)
+	if err != nil {
+		global.GVA_LOG.Error("json Marshal resp msg error", zap.Error(err))
+		return
+	}
 
-}
-
-func (ws *WsServer) msgParse(conn *UserConn, msg []byte) {
-
+	ws.writeMsg(c, websocket.TextMessage, result)
 }

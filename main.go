@@ -6,9 +6,13 @@ import (
 
 	"websocket-pool/pkg/config"
 	"websocket-pool/pkg/gredis"
+	"websocket-pool/pkg/log"
 	"websocket-pool/pkg/server"
 
+	"websocket-pool/global"
+
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -20,16 +24,16 @@ func main() {
 	// 初始化日志组件
 	initLog()
 
-	// 初始化redis
 	srvs.BindBeforeHandler(func() error {
-		gredis.Init(gredis.NewConfig())
+
+		// 初始化redis
+		initRedis()
 		return nil
 	})
 
 	gin.SetMode(gin.ReleaseMode)
 	// 路由初始化
 	engine := gin.Default()
-
 	routers.Init(engine)
 
 	srvs.BindServer(server.Ws.Init(engine))
@@ -37,13 +41,19 @@ func main() {
 }
 
 func initConfig() {
+	// 初始化viper
+	global.GVA_VP = config.Viper()
 	config.Viper("./conf/config.yaml")
 }
 
-func initRedis() {
-	fmt.Print("eee")
+func initRedis() error {
+	gredis.Init(gredis.NewConfig())
+	fmt.Printf("redis pool init success\n")
+	return nil
 }
 
 func initLog() {
-
+	// 初始化zap
+	global.GVA_LOG = log.InitLogger()
+	zap.ReplaceGlobals(global.GVA_LOG)
 }
