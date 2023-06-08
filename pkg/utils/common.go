@@ -1,11 +1,20 @@
 package utils
 
-import "websocket-pool/global"
+import (
+	"math/rand"
+	"strconv"
+	"time"
+	"websocket-pool/global"
+)
 
 func IsDevelopment() bool {
-	if global.GVA_CONFIG.System.Env == "develop" {
-		return true
-	}
+	return global.GVA_CONFIG.System.Env == "develop"
+}
 
-	return false
+func OperationIDGenerator() string {
+	return strconv.FormatInt(time.Now().UnixNano()+int64(rand.Uint32()), 10)
+}
+
+func Int32ToString(i int32) string {
+	return strconv.FormatInt(int64(i), 10)
 }

@@ -19,24 +19,27 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	WsServer_QueryUsersOnline_FullMethodName = "/protobuf.WsServer/QueryUsersOnline"
 	WsServer_SendMsg_FullMethodName          = "/protobuf.WsServer/SendMsg"
 	WsServer_SendMsgAll_FullMethodName       = "/protobuf.WsServer/SendMsgAll"
+	WsServer_SendMsgTo_FullMethodName        = "/protobuf.WsServer/SendMsgTo"
 	WsServer_GetUserList_FullMethodName      = "/protobuf.WsServer/GetUserList"
+	WsServer_QueryUsersOnline_FullMethodName = "/protobuf.WsServer/QueryUsersOnline"
 )
 
 // WsServerClient is the client API for WsServer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WsServerClient interface {
-	// 查询用户是否在线
-	QueryUsersOnline(ctx context.Context, in *QueryUsersOnlineReq, opts ...grpc.CallOption) (*QueryUsersOnlineRsp, error)
 	// 发送消息
 	SendMsg(ctx context.Context, in *SendMsgReq, opts ...grpc.CallOption) (*SendMsgRsp, error)
 	// 给这台机器的房间内所有用户发送消息
 	SendMsgAll(ctx context.Context, in *SendMsgAllReq, opts ...grpc.CallOption) (*SendMsgAllRsp, error)
+	// 给这台机器的房间内指定用户发送消息
+	SendMsgTo(ctx context.Context, in *SendMsgToReq, opts ...grpc.CallOption) (*SendMsgToRsp, error)
 	// 获取用户列表
 	GetUserList(ctx context.Context, in *GetUserListReq, opts ...grpc.CallOption) (*GetUserListRsp, error)
+	// 查询用户是否在线
+	QueryUsersOnline(ctx context.Context, in *QueryUsersOnlineReq, opts ...grpc.CallOption) (*QueryUsersOnlineRsp, error)
 }
 
 type wsServerClient struct {
@@ -45,15 +48,6 @@ type wsServerClient struct {
 
 func NewWsServerClient(cc grpc.ClientConnInterface) WsServerClient {
 	return &wsServerClient{cc}
-}
-
-func (c *wsServerClient) QueryUsersOnline(ctx context.Context, in *QueryUsersOnlineReq, opts ...grpc.CallOption) (*QueryUsersOnlineRsp, error) {
-	out := new(QueryUsersOnlineRsp)
-	err := c.cc.Invoke(ctx, WsServer_QueryUsersOnline_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *wsServerClient) SendMsg(ctx context.Context, in *SendMsgReq, opts ...grpc.CallOption) (*SendMsgRsp, error) {
@@ -74,9 +68,27 @@ func (c *wsServerClient) SendMsgAll(ctx context.Context, in *SendMsgAllReq, opts
 	return out, nil
 }
 
+func (c *wsServerClient) SendMsgTo(ctx context.Context, in *SendMsgToReq, opts ...grpc.CallOption) (*SendMsgToRsp, error) {
+	out := new(SendMsgToRsp)
+	err := c.cc.Invoke(ctx, WsServer_SendMsgTo_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *wsServerClient) GetUserList(ctx context.Context, in *GetUserListReq, opts ...grpc.CallOption) (*GetUserListRsp, error) {
 	out := new(GetUserListRsp)
 	err := c.cc.Invoke(ctx, WsServer_GetUserList_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *wsServerClient) QueryUsersOnline(ctx context.Context, in *QueryUsersOnlineReq, opts ...grpc.CallOption) (*QueryUsersOnlineRsp, error) {
+	out := new(QueryUsersOnlineRsp)
+	err := c.cc.Invoke(ctx, WsServer_QueryUsersOnline_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,14 +99,16 @@ func (c *wsServerClient) GetUserList(ctx context.Context, in *GetUserListReq, op
 // All implementations must embed UnimplementedWsServerServer
 // for forward compatibility
 type WsServerServer interface {
-	// 查询用户是否在线
-	QueryUsersOnline(context.Context, *QueryUsersOnlineReq) (*QueryUsersOnlineRsp, error)
 	// 发送消息
 	SendMsg(context.Context, *SendMsgReq) (*SendMsgRsp, error)
 	// 给这台机器的房间内所有用户发送消息
 	SendMsgAll(context.Context, *SendMsgAllReq) (*SendMsgAllRsp, error)
+	// 给这台机器的房间内指定用户发送消息
+	SendMsgTo(context.Context, *SendMsgToReq) (*SendMsgToRsp, error)
 	// 获取用户列表
 	GetUserList(context.Context, *GetUserListReq) (*GetUserListRsp, error)
+	// 查询用户是否在线
+	QueryUsersOnline(context.Context, *QueryUsersOnlineReq) (*QueryUsersOnlineRsp, error)
 	mustEmbedUnimplementedWsServerServer()
 }
 
@@ -102,17 +116,20 @@ type WsServerServer interface {
 type UnimplementedWsServerServer struct {
 }
 
-func (UnimplementedWsServerServer) QueryUsersOnline(context.Context, *QueryUsersOnlineReq) (*QueryUsersOnlineRsp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QueryUsersOnline not implemented")
-}
 func (UnimplementedWsServerServer) SendMsg(context.Context, *SendMsgReq) (*SendMsgRsp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendMsg not implemented")
 }
 func (UnimplementedWsServerServer) SendMsgAll(context.Context, *SendMsgAllReq) (*SendMsgAllRsp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendMsgAll not implemented")
 }
+func (UnimplementedWsServerServer) SendMsgTo(context.Context, *SendMsgToReq) (*SendMsgToRsp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendMsgTo not implemented")
+}
 func (UnimplementedWsServerServer) GetUserList(context.Context, *GetUserListReq) (*GetUserListRsp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserList not implemented")
+}
+func (UnimplementedWsServerServer) QueryUsersOnline(context.Context, *QueryUsersOnlineReq) (*QueryUsersOnlineRsp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryUsersOnline not implemented")
 }
 func (UnimplementedWsServerServer) mustEmbedUnimplementedWsServerServer() {}
 
@@ -125,24 +142,6 @@ type UnsafeWsServerServer interface {
 
 func RegisterWsServerServer(s grpc.ServiceRegistrar, srv WsServerServer) {
 	s.RegisterService(&WsServer_ServiceDesc, srv)
-}
-
-func _WsServer_QueryUsersOnline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryUsersOnlineReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WsServerServer).QueryUsersOnline(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WsServer_QueryUsersOnline_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WsServerServer).QueryUsersOnline(ctx, req.(*QueryUsersOnlineReq))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _WsServer_SendMsg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -181,6 +180,24 @@ func _WsServer_SendMsgAll_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WsServer_SendMsgTo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendMsgToReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WsServerServer).SendMsgTo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WsServer_SendMsgTo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WsServerServer).SendMsgTo(ctx, req.(*SendMsgToReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _WsServer_GetUserList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetUserListReq)
 	if err := dec(in); err != nil {
@@ -199,6 +216,24 @@ func _WsServer_GetUserList_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WsServer_QueryUsersOnline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryUsersOnlineReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WsServerServer).QueryUsersOnline(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WsServer_QueryUsersOnline_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WsServerServer).QueryUsersOnline(ctx, req.(*QueryUsersOnlineReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WsServer_ServiceDesc is the grpc.ServiceDesc for WsServer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,10 +241,6 @@ var WsServer_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "protobuf.WsServer",
 	HandlerType: (*WsServerServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "QueryUsersOnline",
-			Handler:    _WsServer_QueryUsersOnline_Handler,
-		},
 		{
 			MethodName: "SendMsg",
 			Handler:    _WsServer_SendMsg_Handler,
@@ -219,8 +250,16 @@ var WsServer_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WsServer_SendMsgAll_Handler,
 		},
 		{
+			MethodName: "SendMsgTo",
+			Handler:    _WsServer_SendMsgTo_Handler,
+		},
+		{
 			MethodName: "GetUserList",
 			Handler:    _WsServer_GetUserList_Handler,
+		},
+		{
+			MethodName: "QueryUsersOnline",
+			Handler:    _WsServer_QueryUsersOnline_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1,11 +1,8 @@
 package entity
 
 type Req struct {
-	Seq  string      `json:"seq"` // 消息唯一ID
-	Cmd  string      `json:"cmd"`
-	Data interface{} `json:"data,omitempty"`
-}
-
-type Header struct {
-	Token string `json:"token"`
+	AppID      string `json:"appId" validate:"required"` // 业务ID
+	Token      string `json:"token" validate:"required"` // 用户
+	GID        string `json:"gid"`                       // 本次会话ID
+	PlatformID string `json:"platformID,omitempty"`      //平台
 }

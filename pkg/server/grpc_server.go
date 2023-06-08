@@ -1,9 +1,8 @@
 package server
 
 import (
-	"fmt"
+	"log"
 	"net"
-	"websocket-pool/global"
 
 	"google.golang.org/grpc"
 )
@@ -12,6 +11,7 @@ type GRPCServer struct {
 	srv         *grpc.Server
 	Name        string
 	Addr        string
+	Port        int
 	ServiceOpts []grpc.ServerOption
 	RegisterFn  func(srv *grpc.Server)
 }
@@ -26,7 +26,7 @@ func (s *GRPCServer) Run() error {
 		s.RegisterFn(s.srv)
 	}
 
-	global.GVA_LOG.Info(fmt.Sprintf("GRPC server start, listen: %s", s.Addr))
+	log.Printf("[INFO] GRPC server start, listen: %s\n", s.Addr)
 	if err := s.srv.Serve(l); err != nil {
 		return err
 	}

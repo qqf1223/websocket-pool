@@ -1,14 +1,24 @@
 system:
   env: 'develop'
-  forwardingRule: 'rpc'
+  relayRule: 'rpc'
+  transferPoolSize: 10
+
 websocket:
-  addr: 127.0.0.1
-  port: 8080
+  addr: ':8080'
   timeout: 30
   maxConnNum: 10000
   maxMsgLen: 4096
+
+http:
+  addr: ":9000"
+  timeout: 30
+
 rpc:
-  host: ':9000'
+  addr: ":9001"
+
+udp:
+  addr: ":25515"
+
 redis:
   host: '127.0.0.1'
   port: 6379
@@ -31,3 +41,10 @@ zap:
   max-age: 30 # 默认日志留存默认以天为单位
   show-line: true
   log-in-console: true
+
+etcd:
+  schema: openim  #默认即可
+  addr: [ 127.0.0.1:2379 ] #单机部署时，默认即可
+  userName:
+  password:
+  secret:

@@ -3,12 +3,14 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"websocket-pool/entity"
 	"websocket-pool/global"
 	"websocket-pool/pkg/client"
+	"websocket-pool/pkg/consts"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -19,21 +21,19 @@ import (
 var clientManager = client.NewClientManager()
 
 type WsServer struct {
-	handler    http.Handler
-	addr       string
-	port       int
-	maxConnNum int
-	upGrader   *websocket.Upgrader
+	Handler    http.Handler
+	Addr       string
+	MaxConnNum int
+	UpGrader   *websocket.Upgrader
 }
 
 var Ws WsServer
 
 func (ws *WsServer) Init(engine *gin.Engine) *WsServer {
-	ws.handler = engine
-	ws.addr = global.GVA_CONFIG.WS.Addr + ":" + cast.ToString(global.GVA_CONFIG.WS.Port)
-	ws.port = global.GVA_CONFIG.WS.Port
-	ws.maxConnNum = global.GVA_CONFIG.WS.MaxConnNum
-	ws.upGrader = &websocket.Upgrader{
+	ws.Handler = engine
+	ws.Addr = global.GVA_CONFIG.WS.Addr
+	ws.MaxConnNum = global.GVA_CONFIG.WS.MaxConnNum
+	ws.UpGrader = &websocket.Upgrader{
 		HandshakeTimeout: time.Duration(global.GVA_CONFIG.WS.Timeout) * time.Second,
 		ReadBufferSize:   global.GVA_CONFIG.WS.MaxMsgLen,
 		WriteBufferSize:  global.GVA_CONFIG.WS.MaxMsgLen,
@@ -48,12 +48,12 @@ func (ws *WsServer) Init(engine *gin.Engine) *WsServer {
 
 func (ws *WsServer) Run() error {
 	srv := &http.Server{
-		Addr:    ws.addr,
-		Handler: ws.handler,
+		Addr:    ws.Addr,
+		Handler: ws.Handler,
 	}
 	// 开启客户端连接管理
 	go clientManager.Start()
-	global.GVA_LOG.Info(fmt.Sprintf("websocket server start sucess.listen:%s", ws.addr))
+	log.Printf("[INFO] websocket server start, listen: %s\n", ws.Addr)
 	err := srv.ListenAndServe() //Start listening
 	if err != nil {
 		return fmt.Errorf("Ws listening err: %s" + err.Error())
@@ -63,25 +63,29 @@ func (ws *WsServer) Run() error {
 }
 
 func (ws *WsServer) WebsocketEntry(ctx *gin.Context) {
-	ws.headerCheck(ctx)
-	conn, err := ws.upGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	isPass, wsObj, err := ws.ValidityCheck(ctx)
 	if err != nil {
-		// handler error
-		global.GVA_LOG.Error("connect error", zap.Error(err))
+		global.GVA_LOG.Error("authentication error", zap.Error(err))
 		return
-	} else {
-		newClient := client.NewClient(conn, conn.RemoteAddr().String())
-		clientManager.Register <- newClient
-		go ws.readMsg(ctx, newClient)
-		// go ws.writeMsg()
 	}
-
+	if isPass {
+		conn, e := ws.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+		if e != nil {
+			// handler error
+			global.GVA_LOG.Error("connect error", zap.Error(err))
+			return
+		} else {
+			newClient := client.NewClient(conn, wsObj)
+			clientManager.Register <- newClient
+			go ws.readMsg(ctx, newClient)
+		}
+	} else {
+		global.GVA_LOG.Error("authentication failed", zap.Error(err))
+	}
 }
 
 func (ws *WsServer) readMsg(ctx *gin.Context, c *client.Client) {
 	for {
-		token := ctx.GetHeader("token")
-		fmt.Println(token)
 		messageType, msg, err := c.Conn.ReadMessage()
 		if err != nil {
 			global.GVA_LOG.Error("ws readMsg error ", zap.String("userIP", c.Addr), zap.Error(err))
@@ -102,11 +106,6 @@ func (ws *WsServer) readMsg(ctx *gin.Context, c *client.Client) {
 	}
 }
 
-func (ws *WsServer) writeMsg(c *client.Client, t int, msg []byte) {
-
-	c.Conn.WriteMessage(t, msg)
-}
-
 func (ws *WsServer) delClientConn(c *client.Client) {
 	err := c.Conn.Close()
 	if err != nil {
@@ -118,26 +117,50 @@ func (ws *WsServer) delClientConn(c *client.Client) {
 
 func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
 	global.GVA_LOG.Info("receive message", zap.String("msg", cast.ToString(msg)))
-	req := &entity.Req{}
-	err := json.Unmarshal(msg, req)
+	body := &entity.MessageBody{}
+	err := json.Unmarshal(msg, body)
 	if err != nil {
 		global.GVA_LOG.Error("json Unmarshal req msg error", zap.Error(err))
 		return
 	}
-	resp := &entity.Resp{}
-	result, err := json.Marshal(resp)
-	if err != nil {
-		global.GVA_LOG.Error("json Marshal resp msg error", zap.Error(err))
+
+	// 判定是客户端-客户端 or 客户端-服务端（需要服务端进行处理或需要广播），服务端-客户端（点对点/广播）
+	if body.Cmd == consts.Signalling_HeartBeat {
+		// 直接回复客户端指令
+		resp := fmt.Sprintf(consts.Signalling_HEARTBEAT_Resp, c.Context.PlatformID, body.Timestamp, body.Timestamp, body.Cmd)
+		c.Send <- resp
+	} else if c.Context.PlatformID != consts.Platform_Server {
+		// 需要服务端处理转发
+		clientManager.ReceiveC <- entity.MessageEntity{
+			Context: c.Context,
+			Body:    string(msg),
+		}
+	} else if c.Context.PlatformID == consts.Platform_Server {
+		// 接收服务端信令，需要寻找客户端进行处理
+		clientManager.SendC <- entity.MessageEntity{
+			Context: entity.ContextEntity{},
+			Body:    string(msg),
+		}
+	}
+}
+
+func (ws *WsServer) ValidityCheck(ctx *gin.Context) (isPass bool, wsObj *entity.Req, err error) {
+	appId, _ := ctx.GetQuery("appId")
+	token, _ := ctx.GetQuery("token")
+	gid, _ := ctx.GetQuery("gid")
+	platformID, _ := ctx.GetQuery("platformID")
+	if appId == "" || token == "" || platformID == "" {
 		return
 	}
 
-	ws.writeMsg(c, websocket.TextMessage, result)
-}
-
-func (ws *WsServer) headerCheck(ctx *gin.Context) {
-	token, _ := ctx.GetQuery("token")
-	sendID, _ := ctx.GetQuery("sendID")
-
-	fmt.Println(token)
-	fmt.Println(sendID)
+	wsObj = &entity.Req{
+		AppID:      appId,
+		Token:      token,
+		GID:        gid,
+		PlatformID: platformID,
+	}
+	// TODO: 通过第三方校验token
+	// 暂时使用本地进行校验
+	isPass = true
+	return
 }

@@ -10,22 +10,29 @@ type Config struct {
 	System System `mapstructure:"system" json:"system" yaml:"system"`
 	Zap    Zap    `mapstructure:"zap" json:"zap" yaml:"zap"`
 	WS     WS     `mapstructure:"websocket" json:"websocket" yaml:"websocket"`
+	Http   Http   `mapstructure:"http" json:"http" yaml:"http"`
 	Rpc    Rpc    `mapstructure:"rpc" json:"rpc" yaml:"rpc"`
 	REDIS  REDIS  `mapstructure:"redis" json:"redis" yaml:"redis"`
+	Udp    Udp    `mapstructure:"udp" json:"udp" yaml:"udp"`
+	Etcd   Etcd   `mapstructure:"etcd" json:"etcd" yaml:"etcd"`
 }
 type System struct {
-	Env string `mapstructure:"env" json:"env" yaml:"env"` // 环境值
+	Env              string `mapstructure:"env" json:"env" yaml:"env"`                                        // 环境值
+	TransferPoolSize int    `mapstructure:"transferPoolSize" json:"transferPoolSize" yaml:"transferPoolSize"` // 业务转发池控制
 }
 
+type Http struct {
+	Addr    string `mapstructure:"addr" json:"addr" yaml:"addr"`
+	Timeout int    `mapstructure:"timeout" json:"timeout" yaml:"timeout"`
+}
 type WS struct {
 	Addr       string `mapstructure:"addr" json:"addr" yaml:"addr"`
-	Port       int    `mapstructure:"port" json:"port" yaml:"port"`
 	Timeout    int    `mapstructure:"timeout" json:"timeout" yaml:"timeout"`
 	MaxMsgLen  int    `mapstructure:"maxMsgLen" json:"maxMsgLen" yaml:"maxMsgLen"`
 	MaxConnNum int    `mapstructure:"maxConnNum" json:"maxConnNum" yaml:"maxConnNum"`
 }
 type Rpc struct {
-	Host string `mapstructure:"host" json:"host" yaml:"host"`
+	Addr string `mapstructure:"addr" json:"addr" yaml:"addr"`
 }
 
 type REDIS struct {
@@ -39,6 +46,10 @@ type REDIS struct {
 	Timeout     int    `mapstructure:"timeout" json:"timeout" yaml:"timeout"`
 	UseTLS      bool   `mapstructure:"useTls" json:"useTls" yaml:"useTls"`
 	SkipVerify  bool   `mapstructure:"skipVerify" json:"skipVerify" yaml:"skipVerify"`
+}
+
+type Udp struct {
+	Addr string `mapstructure:"addr" json:"addr" yaml:"addr"`
 }
 
 type Zap struct {
@@ -90,4 +101,12 @@ func (z *Zap) ZapEncodeLevel() zapcore.LevelEncoder {
 	default:
 		return zapcore.LowercaseLevelEncoder
 	}
+}
+
+type Etcd struct {
+	Schema   string   `mapstructure:"schema" json:"schema" yaml:"schema"`
+	Addr     []string `mapstructure:"addr" json:"addr" yaml:"addr"`
+	UserName string   `mapstructure:"userName" json:"userName" yaml:"userName"`
+	Password string   `mapstructure:"password" json:"password" yaml:"password"`
+	Secret   string   `mapstructure:"secret" json:"secret" yaml:"secret"`
 }

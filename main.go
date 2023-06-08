@@ -1,6 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"net"
+	"strings"
+	"websocket-pool/entity"
+	"websocket-pool/internal/rpc"
 	"websocket-pool/protobuf"
 	"websocket-pool/routers"
 
@@ -21,10 +26,8 @@ func main() {
 	srvs := server.NewServers()
 	// 初始化配置文件
 	initConfig()
-
 	// 初始化日志组件
 	initLog()
-
 	srvs.BindBeforeHandler(func() error {
 		// 初始化redis
 		initRedis()
@@ -33,23 +36,42 @@ func main() {
 
 	gin.SetMode(gin.ReleaseMode)
 	// 路由初始化
-	engine := gin.Default()
-	routers.Init(engine)
+	r := routers.Init()
 	// websocket server init
-	srvs.BindServer(server.Ws.Init(engine))
+	srvs.BindServer(server.Ws.Init(r))
 	// rpc server init
 	srvs.BindServer(&server.GRPCServer{
-		Name:        "Tool",
-		Addr:        global.GVA_CONFIG.Rpc.Host,
+		Name:        "RPC",
+		Addr:        global.GVA_CONFIG.Rpc.Addr,
 		ServiceOpts: []grpc.ServerOption{},
 		RegisterFn: func(srv *grpc.Server) {
-			protobuf.RegisterWsServerServer(srv, nil)
+			protobuf.RegisterWsServerServer(srv, new(rpc.WsService))
 		},
 	})
-	// srvs.BindServer(server.Rpc.Init(engine))
+	// udp server init
+	srvs.BindServer(&server.UDPServer{
+		Recv: make(chan []byte, 1000),
+	})
+	// http server init
+	srvs.BindServer(&server.WebServer{
+		Name:    "Web",
+		Addr:    global.GVA_CONFIG.Http.Addr,
+		Timeout: global.GVA_CONFIG.Http.Timeout,
+		Handler: routers.WebInit(),
+	})
+	initNodeInfo()
 	srvs.Run()
 }
-
+func initNodeInfo() (entity.MessageBody, error) {
+	ret := entity.MessageBody{}
+	conn, err := net.Dial("udp", "192.168.2.3:80")
+	if err != nil {
+		return ret, err
+	}
+	defer conn.Close()
+	fmt.Println("当前ip:", strings.Split(conn.LocalAddr().String(), ":")[0])
+	return ret, nil
+}
 func initConfig() {
 	// 初始化viper
 	global.GVA_VP = config.Viper()
