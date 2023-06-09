@@ -1,10 +1,13 @@
 package entity
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type MessageEntity struct {
-	Context ContextEntity // 公参
-	Body    string
+	BizContext ContextEntity // 公参
+	Body       string
 }
 
 type MessageBody struct {
@@ -15,6 +18,7 @@ type MessageBody struct {
 	OperationID string //
 }
 type ContextEntity struct {
+	Context    context.Context
 	AppID      string `json:"appId"`
 	PlatformID string `json:"platformId"`
 	Token      string `json:"token"`

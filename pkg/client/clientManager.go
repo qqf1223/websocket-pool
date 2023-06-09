@@ -8,6 +8,7 @@ import (
 	"websocket-pool/entity"
 	"websocket-pool/global"
 	"websocket-pool/pkg/gredis"
+	"websocket-pool/pkg/nodeManager"
 
 	"go.uber.org/zap"
 )
@@ -26,18 +27,19 @@ type ClientManager struct {
 	ReceiveC    chan entity.MessageEntity
 }
 
-var Cm ClientManager
+var Cm *ClientManager
 
-func NewClientManager() (cm *ClientManager) {
+func (cm *ClientManager) NewClientManager() *ClientManager {
 	cm = &ClientManager{
 		Clients:    make(map[*Client]bool),
 		Users:      make(map[string][]*Client),
 		Register:   make(chan *Client, 1000),
 		UnRegister: make(chan *Client, 1000),
 		Broadcast:  make(chan []byte, 1000),
+		ReceiveC:   make(chan entity.MessageEntity, 1000),
 	}
 
-	return
+	return cm
 }
 
 func (cm *ClientManager) GetClients() (clients map[*Client]bool) {
@@ -51,7 +53,7 @@ func (cm *ClientManager) GetClients() (clients map[*Client]bool) {
 }
 
 // 新增客户端连接
-func (cm *ClientManager) AddClients(c *Client) {
+func (cm *ClientManager) addClients(c *Client) {
 	cm.ClientsLock.Lock()
 	defer cm.ClientsLock.Unlock()
 	if _, ok := cm.Clients[c]; !ok {
@@ -63,7 +65,7 @@ func (cm *ClientManager) AddClients(c *Client) {
 }
 
 // 删除客户端
-func (cm *ClientManager) DelClients(c *Client) {
+func (cm *ClientManager) delClients(c *Client) {
 	cm.ClientsLock.Lock()
 	defer cm.ClientsLock.Unlock()
 	defer func() {
@@ -85,12 +87,17 @@ func (cm *ClientManager) DelClients(c *Client) {
 }
 
 func (cm *ClientManager) EventRegister(c *Client) {
-	cm.AddClients(c)
+	cm.addClients(c)
 	global.GVA_LOG.Info("client connect", zap.String("userIp", c.Addr), zap.Int64("ClientCount", cm.ClientCount))
 }
 
 func (cm *ClientManager) EventUnRegister(c *Client) {
-	cm.DelClients(c)
+	err := c.Conn.Close()
+	if err != nil {
+		global.GVA_LOG.Error("close err", zap.Error(err))
+		return
+	}
+	cm.delClients(c)
 	global.GVA_LOG.Info("client disconnect", zap.String("userIp", c.Addr), zap.Int64("ClientCount", cm.ClientCount))
 }
 
@@ -109,29 +116,32 @@ func (cm *ClientManager) Start() {
 }
 
 func (cm *ClientManager) safeSend(m entity.MessageEntity) {
-
 	// 获取client
-	key := entity.GetContextKey(m.Context)
+	key := entity.GetContextKey(m.BizContext)
 	// 若本地找到对应客户端，则发送，否则寻找客户端连接进行分发
 	if conn, ok := cm.ClientMap.Load(key); ok {
 		conn.(*Client).SendTo(m)
 	} else {
-
+		nodeManager.NodeM.Distribute(m)
 	}
 }
 
 func (cm *ClientManager) SendTo(ctx context.Context, m *entity.BizMessageEntity) {
+	t := time.Now()
+	bizContext := entity.ContextEntity{
+		Context:    ctx,
+		AppID:      m.AppID,
+		PlatformID: m.PlatformID,
+		Token:      m.Token,
+		GID:        m.GID,
+	}
+	defer func() {
+		global.GVA_LOG.Info("server send to client end", zap.Any("context", entity.GetContextKey(bizContext)), zap.Duration("cost", time.Since(t)))
+	}()
 	// 构造消息
 	to := entity.MessageEntity{
-		Context: entity.ContextEntity{
-			AppID:      m.AppID,
-			PlatformID: m.PlatformID,
-			Token:      m.Token,
-			GID:        m.GID,
-		},
-		Body: m.Data,
+		BizContext: bizContext,
+		Body:       m.Data,
 	}
-	t := time.Now()
 	cm.SendC <- to
-	global.GVA_LOG.Info("server send to client end", zap.Any("context", entity.GetContextKey(to.Context)), zap.Duration("cost", time.Since(t)))
 }

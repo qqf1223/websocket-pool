@@ -2,7 +2,6 @@ package service
 
 import (
 	"websocket-pool/entity"
-	"websocket-pool/pkg/client"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,5 +16,5 @@ func ServerEntry(c *gin.Context) {
 		return
 	}
 
-	client.NewClientManager().SendTo(c, req)
+	// client.NewClientManager().SendTo(c, req)
 }

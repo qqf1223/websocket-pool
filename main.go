@@ -1,20 +1,18 @@
 package main
 
 import (
-	"fmt"
-	"net"
 	"strings"
-	"websocket-pool/entity"
 	"websocket-pool/internal/rpc"
-	"websocket-pool/protobuf"
-	"websocket-pool/routers"
-
 	"websocket-pool/pkg/config"
 	"websocket-pool/pkg/gredis"
 	"websocket-pool/pkg/log"
 	"websocket-pool/pkg/server"
+	"websocket-pool/pkg/utils"
+	"websocket-pool/protobuf"
+	"websocket-pool/routers"
 
 	"websocket-pool/global"
+	"websocket-pool/pkg/discover/getcdv3"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -35,10 +33,10 @@ func main() {
 	})
 
 	gin.SetMode(gin.ReleaseMode)
-	// 路由初始化
-	r := routers.Init()
+
 	// websocket server init
-	srvs.BindServer(server.Ws.Init(r))
+	srvs.BindServer(server.Ws.Init(routers.Init()))
+
 	// rpc server init
 	srvs.BindServer(&server.GRPCServer{
 		Name:        "RPC",
@@ -59,19 +57,20 @@ func main() {
 		Timeout: global.GVA_CONFIG.Http.Timeout,
 		Handler: routers.WebInit(),
 	})
-	initNodeInfo()
+	go registerNodeInfo()
 	srvs.Run()
 }
-func initNodeInfo() (entity.MessageBody, error) {
-	ret := entity.MessageBody{}
-	conn, err := net.Dial("udp", "192.168.2.3:80")
+func registerNodeInfo() (err error) {
+	registerIP, _ := utils.GetOutboundIP()
+	err = getcdv3.RegisterEtcd(global.GVA_CONFIG.Etcd.Schema, strings.Join(global.GVA_CONFIG.Etcd.Addr, ","), registerIP, 0, global.GVA_CONFIG.System.Name, 10)
 	if err != nil {
-		return ret, err
+		global.GVA_LOG.Error("RegisterEtcd failed ", zap.Error(err))
+		return
 	}
-	defer conn.Close()
-	fmt.Println("当前ip:", strings.Split(conn.LocalAddr().String(), ":")[0])
-	return ret, nil
+	global.GVA_LOG.Info("RegisterEtcd ", zap.String("schema", global.GVA_CONFIG.Etcd.Schema), zap.String("addr", strings.Join(global.GVA_CONFIG.Etcd.Addr, ",")), zap.String("registerIP", registerIP), zap.String("srvName", global.GVA_CONFIG.System.Name))
+	return
 }
+
 func initConfig() {
 	// 初始化viper
 	global.GVA_VP = config.Viper()

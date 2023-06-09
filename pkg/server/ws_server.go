@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var clientManager = client.NewClientManager()
+// var clientManager = client.NewClientManager()
 
 type WsServer struct {
 	Handler    http.Handler
@@ -43,6 +43,9 @@ func (ws *WsServer) Init(engine *gin.Engine) *WsServer {
 		},
 		EnableCompression: false,
 	}
+	client.Cm = client.Cm.NewClientManager()
+	// 开启客户端连接管理
+	go client.Cm.Start()
 	return ws
 }
 
@@ -51,8 +54,7 @@ func (ws *WsServer) Run() error {
 		Addr:    ws.Addr,
 		Handler: ws.Handler,
 	}
-	// 开启客户端连接管理
-	go clientManager.Start()
+
 	log.Printf("[INFO] websocket server start, listen: %s\n", ws.Addr)
 	err := srv.ListenAndServe() //Start listening
 	if err != nil {
@@ -75,8 +77,8 @@ func (ws *WsServer) WebsocketEntry(ctx *gin.Context) {
 			global.GVA_LOG.Error("connect error", zap.Error(err))
 			return
 		} else {
-			newClient := client.NewClient(conn, wsObj)
-			clientManager.Register <- newClient
+			newClient := client.NewClient(ctx, conn, wsObj)
+			client.Cm.Register <- newClient
 			go ws.readMsg(ctx, newClient)
 		}
 	} else {
@@ -89,7 +91,7 @@ func (ws *WsServer) readMsg(ctx *gin.Context, c *client.Client) {
 		messageType, msg, err := c.Conn.ReadMessage()
 		if err != nil {
 			global.GVA_LOG.Error("ws readMsg error ", zap.String("userIP", c.Addr), zap.Error(err))
-			ws.delClientConn(c)
+			client.Cm.UnRegister <- c
 			return
 		}
 		if messageType == websocket.PingMessage {
@@ -98,21 +100,12 @@ func (ws *WsServer) readMsg(ctx *gin.Context, c *client.Client) {
 		}
 		if messageType == websocket.CloseMessage {
 			global.GVA_LOG.Info("close message")
-			ws.delClientConn(c)
+			client.Cm.UnRegister <- c
 			return
 		}
 
 		ws.msgParse(c, msg)
 	}
-}
-
-func (ws *WsServer) delClientConn(c *client.Client) {
-	err := c.Conn.Close()
-	if err != nil {
-		global.GVA_LOG.Error("close err", zap.Error(err))
-		return
-	}
-	clientManager.UnRegister <- c
 }
 
 func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
@@ -128,18 +121,18 @@ func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
 	if body.Cmd == consts.Signalling_HeartBeat {
 		// 直接回复客户端指令
 		resp := fmt.Sprintf(consts.Signalling_HEARTBEAT_Resp, c.Context.PlatformID, body.Timestamp, body.Timestamp, body.Cmd)
-		c.Send <- resp
+		c.Jobs <- resp
 	} else if c.Context.PlatformID != consts.Platform_Server {
 		// 需要服务端处理转发
-		clientManager.ReceiveC <- entity.MessageEntity{
-			Context: c.Context,
-			Body:    string(msg),
+		client.Cm.ReceiveC <- entity.MessageEntity{
+			BizContext: c.Context,
+			Body:       string(msg),
 		}
 	} else if c.Context.PlatformID == consts.Platform_Server {
 		// 接收服务端信令，需要寻找客户端进行处理
-		clientManager.SendC <- entity.MessageEntity{
-			Context: entity.ContextEntity{},
-			Body:    string(msg),
+		client.Cm.SendC <- entity.MessageEntity{
+			BizContext: entity.ContextEntity{},
+			Body:       string(msg),
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"time"
 	"websocket-pool/entity"
 	"websocket-pool/global"
@@ -13,13 +14,14 @@ type Client struct {
 	Context   entity.ContextEntity
 	Conn      *websocket.Conn
 	Addr      string
-	Send      chan string
+	Jobs      chan string
 	Timestamp int64
 	Key       string
 }
 
-func NewClient(ws *websocket.Conn, wsObj *entity.Req) *Client {
+func NewClient(ctx context.Context, ws *websocket.Conn, wsObj *entity.Req) *Client {
 	context := entity.ContextEntity{
+		Context:    ctx,
 		AppID:      wsObj.AppID,
 		PlatformID: wsObj.PlatformID,
 		Token:      wsObj.Token,
@@ -30,7 +32,7 @@ func NewClient(ws *websocket.Conn, wsObj *entity.Req) *Client {
 		Key:       entity.GetContextKey(context),
 		Conn:      ws,
 		Addr:      ws.RemoteAddr().String(),
-		Send:      make(chan string, 100),
+		Jobs:      make(chan string, 100),
 		Timestamp: time.Now().UnixNano(),
 	}
 	client.init()
@@ -45,7 +47,7 @@ func (c *Client) init() {
 func (c *Client) sandRunner() {
 	for {
 		select {
-		case job, ok := <-c.Send:
+		case job, ok := <-c.Jobs:
 			if !ok {
 				return
 			}
@@ -69,5 +71,5 @@ func (c *Client) safeSend(msg string) {
 }
 
 func (c *Client) SendTo(msg entity.MessageEntity) {
-	c.Send <- msg.Body
+	c.Jobs <- msg.Body
 }

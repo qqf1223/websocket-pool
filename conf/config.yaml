@@ -1,10 +1,12 @@
 system:
+  name: 'websocket-pool'
   env: 'develop'
   relayRule: 'rpc'
   transferPoolSize: 10
+  srvSync: true
 
 websocket:
-  addr: ':8080'
+  addr: '127.0.0.1:8080'
   timeout: 30
   maxConnNum: 10000
   maxMsgLen: 4096
@@ -43,7 +45,7 @@ zap:
   log-in-console: true
 
 etcd:
-  schema: openim  #默认即可
+  schema: wspool  #默认即可
   addr: [ 127.0.0.1:2379 ] #单机部署时，默认即可
   userName:
   password:

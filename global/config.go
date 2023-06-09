@@ -17,8 +17,10 @@ type Config struct {
 	Etcd   Etcd   `mapstructure:"etcd" json:"etcd" yaml:"etcd"`
 }
 type System struct {
+	Name             string `mapstructure:"name" json:"name" yaml:"name"`
 	Env              string `mapstructure:"env" json:"env" yaml:"env"`                                        // 环境值
 	TransferPoolSize int    `mapstructure:"transferPoolSize" json:"transferPoolSize" yaml:"transferPoolSize"` // 业务转发池控制
+	SrvSync          bool   `mapstructure:"srvSync" json:"srvSync" yaml:"srvSync"`                            // 是否同步获取数据
 }
 
 type Http struct {

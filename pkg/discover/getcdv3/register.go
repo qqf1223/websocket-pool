@@ -59,7 +59,8 @@ func RegisterEtcd(schema, etcdAddr, myHost string, myPort int, serviceName strin
 
 	//lease
 	ctx, cancel := context.WithCancel(context.Background())
-	resp, err := cli.Grant(ctx, int64(ttl))
+	cli.Status(ctx, strings.Split(etcdAddr, ",")[0])
+	resp, err := cli.Grant(context.Background(), int64(ttl))
 	if err != nil {
 		global.GVA_LOG.Error("grant failed", zap.String("operationID", operationID), zap.Error(err))
 		return fmt.Errorf("grant failed")
@@ -88,7 +89,7 @@ func RegisterEtcd(schema, etcdAddr, myHost string, myPort int, serviceName strin
 		for {
 			select {
 			case pv, ok := <-kresp:
-				if ok == true {
+				if ok {
 					global.GVA_LOG.Debug("KeepAlive kresp ok", zap.String("operationID", operationID), zap.Any("pv", pv), zap.Any("agrs", args))
 				} else {
 					global.GVA_LOG.Error("KeepAlive kresp failed", zap.String("operationID", operationID), zap.Any("pv", pv), zap.Any("agrs", args))
@@ -120,7 +121,8 @@ func RegisterEtcd(schema, etcdAddr, myHost string, myPort int, serviceName strin
 	rEtcd = &RegEtcd{ctx: ctx,
 		cli:    cli,
 		cancel: cancel,
-		key:    serviceKey}
+		key:    serviceKey,
+	}
 
 	return nil
 }
