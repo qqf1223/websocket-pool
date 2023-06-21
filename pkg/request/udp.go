@@ -1,4 +1,4 @@
-package client
+package request
 
 import (
 	"net"
@@ -9,6 +9,8 @@ import (
 
 type UdpClient struct {
 }
+
+var Udp UdpClient
 
 func (u *UdpClient) Send(host string, body string) (err error) {
 	conn, err := net.Dial("udp", host)

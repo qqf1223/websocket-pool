@@ -7,9 +7,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"websocket-pool/entity"
 	"websocket-pool/global"
 	"websocket-pool/pkg/utils"
 
+	"github.com/spf13/cast"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 )
@@ -21,7 +23,7 @@ type RegEtcd struct {
 	key    string
 }
 
-var rEtcd *RegEtcd
+var rEtcd RegEtcd
 
 // "%s:///%s/"
 func GetPrefix(schema, serviceName string) string {
@@ -34,9 +36,9 @@ func GetPrefix4Unique(schema, serviceName string) string {
 }
 
 // "%s:///%s/" ->  "%s:///%s:ip:port"
-func RegisterEtcd4Unique(schema, etcdAddr, myHost string, myPort int, serviceName string, ttl int) error {
-	serviceName = serviceName + ":" + net.JoinHostPort(myHost, strconv.Itoa(myPort))
-	return RegisterEtcd(schema, etcdAddr, myHost, myPort, serviceName, ttl)
+func RegisterEtcd4Unique(userNode *entity.NodeEntity) error {
+	// serviceName = userNode.NodeName + ":" + net.JoinHostPort(userNode.Ip, strconv.Itoa(userNode.Port))
+	return RegisterEtcd(userNode)
 }
 
 func GetTarget(schema, myHost string, myPort int, serviceName string) string {
@@ -44,22 +46,32 @@ func GetTarget(schema, myHost string, myPort int, serviceName string) string {
 }
 
 //etcdAddr separated by commas
-func RegisterEtcd(schema, etcdAddr, myHost string, myPort int, serviceName string, ttl int) error {
+func RegisterEtcd(userNode *entity.NodeEntity) (err error) {
 	operationID := utils.OperationIDGenerator()
+	myHost := userNode.Ip
+	myPort := userNode.Port
+	serviceName := userNode.NodeName
+	schema := global.GVA_CONFIG.Etcd.Schema
+	etcdAddr := strings.Join(global.GVA_CONFIG.Etcd.Addr, ",")
 	args := schema + " " + etcdAddr + " " + myHost + " " + serviceName + " " + utils.Int32ToString(int32(myPort))
-	ttl = ttl * 3
+	ttl := global.GVA_CONFIG.Etcd.TTL * 3
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints: strings.Split(etcdAddr, ","), DialTimeout: 5 * time.Second})
 
-	global.GVA_LOG.Info("", zap.String("operationID", operationID), zap.String("args", args), zap.Int("ttl", ttl))
+	// global.GVA_LOG.Info("", zap.String("operationID", operationID), zap.String("args", args), zap.Int("ttl", ttl))
 	if err != nil {
-		global.GVA_LOG.Error("create etcd clientv3 client failed", zap.String("etcdAddr", etcdAddr), zap.Error(err))
 		return fmt.Errorf("create etcd clientv3 client failed, errmsg:%v, etcd addr:%s", err, etcdAddr)
 	}
 
 	//lease
-	ctx, cancel := context.WithCancel(context.Background())
-	cli.Status(ctx, strings.Split(etcdAddr, ",")[0])
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(ttl)*time.Second)
+	defer cancel()
+	_, err = cli.Status(ctx, strings.Split(etcdAddr, ",")[0])
+	if err != nil {
+		return fmt.Errorf("etcd server not found.%v", etcdAddr)
+	}
+
+	// if clientv3.StatusResponse.
 	resp, err := cli.Grant(context.Background(), int64(ttl))
 	if err != nil {
 		global.GVA_LOG.Error("grant failed", zap.String("operationID", operationID), zap.Error(err))
@@ -92,7 +104,7 @@ func RegisterEtcd(schema, etcdAddr, myHost string, myPort int, serviceName strin
 				if ok {
 					global.GVA_LOG.Debug("KeepAlive kresp ok", zap.String("operationID", operationID), zap.Any("pv", pv), zap.Any("agrs", args))
 				} else {
-					global.GVA_LOG.Error("KeepAlive kresp failed", zap.String("operationID", operationID), zap.Any("pv", pv), zap.Any("agrs", args))
+					// global.GVA_LOG.Error("KeepAlive kresp failed", zap.String("operationID", operationID), zap.Any("pv", pv), zap.Any("agrs", args))
 					// log.Error(operationID, "KeepAlive kresp failed ", pv, args)
 					t := time.NewTicker(time.Duration(ttl/2) * time.Second)
 					for {
@@ -118,7 +130,8 @@ func RegisterEtcd(schema, etcdAddr, myHost string, myPort int, serviceName strin
 		}
 	}()
 
-	rEtcd = &RegEtcd{ctx: ctx,
+	rEtcd = RegEtcd{
+		ctx:    ctx,
 		cli:    cli,
 		cancel: cancel,
 		key:    serviceKey,
@@ -136,7 +149,9 @@ func UnRegisterEtcd() {
 func registerConf(key, conf string) {
 	etcdAddr := strings.Join(global.GVA_CONFIG.Etcd.Addr, ",")
 	cli, err := clientv3.New(clientv3.Config{
-		Endpoints: strings.Split(etcdAddr, ","), DialTimeout: 5 * time.Second})
+		Endpoints:   strings.Split(etcdAddr, ","),
+		DialTimeout: 5 * time.Second,
+	})
 
 	if err != nil {
 		panic(err.Error())
@@ -149,8 +164,8 @@ func registerConf(key, conf string) {
 
 }
 
-func RegisterConf() {
-	// bytes, err := yaml.Marshal(config.Config)
+func (m *RegEtcd) RegisterConf() {
+	// bytes, err := yaml.Marshal(global.GVA_CONFIG.Etcd)
 	// if err != nil {
 	// 	panic(err.Error())
 	// }
@@ -159,7 +174,25 @@ func RegisterConf() {
 	// if err != nil {
 	// 	panic(err.Error())
 	// }
-	// fmt.Println("start register", secretMD5, GetPrefix(config.Config.Etcd.EtcdSchema, config.ConfName))
-	// registerConf(GetPrefix(config.Config.Etcd.EtcdSchema, "Websocket-pool"), string(confBytes))
+	// fmt.Println("start register", secretMD5, GetPrefix(global.GVA_CONFIG.Etcd.Schema, config.ConfName))
+	// registerConf(GetPrefix(global.GVA_CONFIG.Etcd.Schema, "Websocket-pool"), string(confBytes))
 	// fmt.Println("etcd register conf ok")
+}
+
+func GetServers(ctx context.Context) (serviceEndpoints []*entity.NodeEntity, err error) {
+	resp, err := rEtcd.cli.Get(ctx, rEtcd.key, clientv3.WithPrefix())
+	if err != nil {
+		global.GVA_LOG.Error("GetServers failed", zap.String("key", rEtcd.key), zap.Error(err))
+		return nil, fmt.Errorf("GetServers failed, errmsg:%v， key:%s", err, rEtcd.key)
+	}
+	for _, v := range resp.Kvs {
+		value := string(v.Value)
+		socketSlice := strings.Split(value, ":")
+		serviceEndpoints = append(serviceEndpoints, &entity.NodeEntity{
+			NodeName: global.GVA_CONFIG.System.Name,
+			Ip:       socketSlice[0],
+			Port:     cast.ToInt(socketSlice[1]),
+		})
+	}
+	return
 }

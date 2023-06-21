@@ -44,18 +44,20 @@ func (b *BizTransfer) transferByRule(msg entity.MessageEntity) {
 		global.GVA_LOG.Error("transfer Rule failed.", zap.Error(err))
 		return
 	}
-	uri = "http://mind.im30.lan/api/agora/meeting_room/callback"
 	go b.sendToBiz(msg, uri)
 }
 
 func (b *BizTransfer) sendToBiz(trm entity.MessageEntity, uri string) {
 	t := time.Now()
+	var err error
 	defer func() {
-		global.GVA_LOG.Info("send to server end", zap.Any("context", entity.GetContextKey(trm.BizContext)), zap.Duration("cost", time.Since(t)))
+		if err == nil {
+			global.GVA_LOG.Info("send to server end", zap.Any("context", entity.GetContextKey(trm.BizContext)), zap.Duration("cost", time.Since(t)))
+		}
 	}()
 	header := make(map[string]string)
 	post, _ := json.Marshal(trm)
-	body, err := request.PostWithContext(trm.BizContext.Context, uri, post, global.GVA_CONFIG.Http.Timeout, header)
+	body, err := request.PostWithContext(trm.Context, uri, post, global.GVA_CONFIG.Http.Timeout, header)
 	if err != nil {
 		global.GVA_LOG.Error("http request failed.", zap.Error(err), zap.Any("context", entity.GetContextKey(trm.BizContext)))
 		return
@@ -69,6 +71,6 @@ func (b *BizTransfer) sendToBiz(trm entity.MessageEntity, uri string) {
 	}
 	// 如果设置的是同步，获取到内容开始分发，否则等待服务端调用
 	if global.GVA_CONFIG.System.SrvSync {
-		Cm.SendTo(trm.BizContext.Context, result)
+		Cm.SendTo(trm.Context, result)
 	}
 }

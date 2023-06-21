@@ -108,6 +108,7 @@ func (z *Zap) ZapEncodeLevel() zapcore.LevelEncoder {
 type Etcd struct {
 	Schema   string   `mapstructure:"schema" json:"schema" yaml:"schema"`
 	Addr     []string `mapstructure:"addr" json:"addr" yaml:"addr"`
+	TTL      int      `mapstructure:"ttl" json:"ttl" yaml:"ttl"`
 	UserName string   `mapstructure:"userName" json:"userName" yaml:"userName"`
 	Password string   `mapstructure:"password" json:"password" yaml:"password"`
 	Secret   string   `mapstructure:"secret" json:"secret" yaml:"secret"`

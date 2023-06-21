@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"websocket-pool/global"
 	"websocket-pool/pkg/client"
 	"websocket-pool/pkg/consts"
+	"websocket-pool/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -104,11 +106,11 @@ func (ws *WsServer) readMsg(ctx *gin.Context, c *client.Client) {
 			return
 		}
 
-		ws.msgParse(c, msg)
+		ws.msgParse(ctx, c, msg)
 	}
 }
 
-func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
+func (ws *WsServer) msgParse(ctx context.Context, c *client.Client, msg []byte) {
 	global.GVA_LOG.Info("receive message", zap.String("msg", cast.ToString(msg)))
 	body := &entity.MessageBody{}
 	err := json.Unmarshal(msg, body)
@@ -116,22 +118,25 @@ func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
 		global.GVA_LOG.Error("json Unmarshal req msg error", zap.Error(err))
 		return
 	}
+	if body.OperationID == "" {
+		body.OperationID = utils.OperationIDGenerator()
+	}
 
 	// 判定是客户端-客户端 or 客户端-服务端（需要服务端进行处理或需要广播），服务端-客户端（点对点/广播）
 	if body.Cmd == consts.Signalling_HeartBeat {
 		// 直接回复客户端指令
 		resp := fmt.Sprintf(consts.Signalling_HEARTBEAT_Resp, c.Context.PlatformID, body.Timestamp, body.Timestamp, body.Cmd)
-		c.Jobs <- resp
-	} else if c.Context.PlatformID != consts.Platform_Server {
-		// 需要服务端处理转发
-		client.Cm.ReceiveC <- entity.MessageEntity{
+		respMsg := entity.MessageEntity{
+			Context:    ctx,
 			BizContext: c.Context,
-			Body:       string(msg),
+			Body:       resp,
 		}
-	} else if c.Context.PlatformID == consts.Platform_Server {
-		// 接收服务端信令，需要寻找客户端进行处理
-		client.Cm.SendC <- entity.MessageEntity{
-			BizContext: entity.ContextEntity{},
+		c.SendToC(respMsg, entity.GetContextKey(respMsg.BizContext))
+	} else if c.Context.PlatformID != consts.Platform_Server {
+		// 需要请求服务端
+		client.Cm.ReceiveC <- entity.MessageEntity{
+			Context:    ctx,
+			BizContext: c.Context,
 			Body:       string(msg),
 		}
 	}
@@ -140,7 +145,7 @@ func (ws *WsServer) msgParse(c *client.Client, msg []byte) {
 func (ws *WsServer) ValidityCheck(ctx *gin.Context) (isPass bool, wsObj *entity.Req, err error) {
 	appId, _ := ctx.GetQuery("appId")
 	token, _ := ctx.GetQuery("token")
-	gid, _ := ctx.GetQuery("gid")
+	roomId, _ := ctx.GetQuery("roomId")
 	platformID, _ := ctx.GetQuery("platformID")
 	if appId == "" || token == "" || platformID == "" {
 		return
@@ -149,7 +154,7 @@ func (ws *WsServer) ValidityCheck(ctx *gin.Context) (isPass bool, wsObj *entity.
 	wsObj = &entity.Req{
 		AppID:      appId,
 		Token:      token,
-		GID:        gid,
+		RoomID:     roomId,
 		PlatformID: platformID,
 	}
 	// TODO: 通过第三方校验token

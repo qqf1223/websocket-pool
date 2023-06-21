@@ -1,20 +1,17 @@
 package main
 
 import (
-	"strings"
 	"websocket-pool/internal/rpc"
 	"websocket-pool/pkg/config"
 	"websocket-pool/pkg/gredis"
 	"websocket-pool/pkg/log"
+	"websocket-pool/pkg/nodeManager"
 	"websocket-pool/pkg/server"
-	"websocket-pool/pkg/utils"
 	"websocket-pool/protobuf"
 	"websocket-pool/routers"
 
 	"websocket-pool/global"
-	"websocket-pool/pkg/discover/getcdv3"
 
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -31,8 +28,6 @@ func main() {
 		initRedis()
 		return nil
 	})
-
-	gin.SetMode(gin.ReleaseMode)
 
 	// websocket server init
 	srvs.BindServer(server.Ws.Init(routers.Init()))
@@ -57,18 +52,8 @@ func main() {
 		Timeout: global.GVA_CONFIG.Http.Timeout,
 		Handler: routers.WebInit(),
 	})
-	go registerNodeInfo()
+	nodeManager.NodeM.RegisterNodeInfo()
 	srvs.Run()
-}
-func registerNodeInfo() (err error) {
-	registerIP, _ := utils.GetOutboundIP()
-	err = getcdv3.RegisterEtcd(global.GVA_CONFIG.Etcd.Schema, strings.Join(global.GVA_CONFIG.Etcd.Addr, ","), registerIP, 0, global.GVA_CONFIG.System.Name, 10)
-	if err != nil {
-		global.GVA_LOG.Error("RegisterEtcd failed ", zap.Error(err))
-		return
-	}
-	global.GVA_LOG.Info("RegisterEtcd ", zap.String("schema", global.GVA_CONFIG.Etcd.Schema), zap.String("addr", strings.Join(global.GVA_CONFIG.Etcd.Addr, ",")), zap.String("registerIP", registerIP), zap.String("srvName", global.GVA_CONFIG.System.Name))
-	return
 }
 
 func initConfig() {

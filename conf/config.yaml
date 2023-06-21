@@ -1,5 +1,5 @@
 system:
-  name: 'websocket-pool'
+  name: 'im30-websocket-pool'
   env: 'develop'
   relayRule: 'rpc'
   transferPoolSize: 10
@@ -50,3 +50,4 @@ etcd:
   userName:
   password:
   secret:
+  ttl: 15

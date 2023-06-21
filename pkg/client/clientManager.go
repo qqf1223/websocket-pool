@@ -36,6 +36,7 @@ func (cm *ClientManager) NewClientManager() *ClientManager {
 		Register:   make(chan *Client, 1000),
 		UnRegister: make(chan *Client, 1000),
 		Broadcast:  make(chan []byte, 1000),
+		SendC:      make(chan entity.MessageEntity, 1000),
 		ReceiveC:   make(chan entity.MessageEntity, 1000),
 	}
 
@@ -60,7 +61,15 @@ func (cm *ClientManager) addClients(c *Client) {
 		cm.ClientMap.Store(entity.GetContextKey(c.Context), c)
 		cm.Clients[c] = true
 		cm.ClientCount++
-		gredis.DoWithContext(context.Background(), "INCR", "clientCount")
+		if _, err := gredis.DoWithContext(context.Background(), "INCR", "clientCount"); err != nil {
+			global.GVA_LOG.Error("INCR clientCount err", zap.Error(err))
+			return
+		}
+		// 存放房间列表
+		if _, err := gredis.DoWithContext(context.Background(), "SADD", global.Redis_Room_List, c.Context.RoomID); err != nil {
+			global.GVA_LOG.Error("SADD Room_List err", zap.Error(err))
+			return
+		}
 	}
 }
 
@@ -120,7 +129,7 @@ func (cm *ClientManager) safeSend(m entity.MessageEntity) {
 	key := entity.GetContextKey(m.BizContext)
 	// 若本地找到对应客户端，则发送，否则寻找客户端连接进行分发
 	if conn, ok := cm.ClientMap.Load(key); ok {
-		conn.(*Client).SendTo(m)
+		conn.(*Client).SendToC(m, key)
 	} else {
 		nodeManager.NodeM.Distribute(m)
 	}
@@ -129,17 +138,17 @@ func (cm *ClientManager) safeSend(m entity.MessageEntity) {
 func (cm *ClientManager) SendTo(ctx context.Context, m *entity.BizMessageEntity) {
 	t := time.Now()
 	bizContext := entity.ContextEntity{
-		Context:    ctx,
 		AppID:      m.AppID,
 		PlatformID: m.PlatformID,
 		Token:      m.Token,
-		GID:        m.GID,
+		RoomID:     m.RoomID,
 	}
 	defer func() {
 		global.GVA_LOG.Info("server send to client end", zap.Any("context", entity.GetContextKey(bizContext)), zap.Duration("cost", time.Since(t)))
 	}()
 	// 构造消息
 	to := entity.MessageEntity{
+		Context:    ctx,
 		BizContext: bizContext,
 		Body:       m.Data,
 	}

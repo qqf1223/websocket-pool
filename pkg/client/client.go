@@ -21,11 +21,10 @@ type Client struct {
 
 func NewClient(ctx context.Context, ws *websocket.Conn, wsObj *entity.Req) *Client {
 	context := entity.ContextEntity{
-		Context:    ctx,
 		AppID:      wsObj.AppID,
 		PlatformID: wsObj.PlatformID,
 		Token:      wsObj.Token,
-		GID:        wsObj.GID,
+		RoomID:     wsObj.RoomID,
 	}
 	client := &Client{
 		Context:   context,
@@ -57,19 +56,22 @@ func (c *Client) sandRunner() {
 }
 
 func (c *Client) safeSend(msg string) {
-	defer func() {
-		if err := recover(); err != nil {
-			global.GVA_LOG.Error("发送消息panic", zap.Any("err", err))
-		}
-	}()
 	t := time.Now()
+	defer func() {
+		if r := recover(); r != nil {
+			global.GVA_LOG.Error("发送消息panic", zap.Any("err", r))
+			return
+		}
+		global.GVA_LOG.Info("conn send end", zap.String("key", c.Key), zap.Duration("cost", time.Since(t)))
+	}()
+
 	err := c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
 	if err != nil {
 		global.GVA_LOG.Error("向客户端发送数据异常", zap.Error(err))
 	}
-	global.GVA_LOG.Info("conn send end", zap.String("key", c.Key), zap.Duration("cost", time.Since(t)))
+
 }
 
-func (c *Client) SendTo(msg entity.MessageEntity) {
+func (c *Client) SendToC(msg entity.MessageEntity, key string) {
 	c.Jobs <- msg.Body
 }
