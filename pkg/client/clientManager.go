@@ -39,7 +39,7 @@ func (cm *ClientManager) NewClientManager() *ClientManager {
 		SendC:      make(chan entity.MessageEntity, 1000),
 		ReceiveC:   make(chan entity.MessageEntity, 1000),
 	}
-
+	BizT.Init()
 	return cm
 }
 

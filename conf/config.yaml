@@ -51,3 +51,8 @@ etcd:
   password:
   secret:
   ttl: 15
+
+service:
+  meeting: 
+    uri: http://mind.im30.lan/meeting/v1/websocket/receive
+    gray: false

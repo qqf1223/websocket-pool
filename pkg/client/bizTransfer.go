@@ -8,6 +8,7 @@ import (
 	"websocket-pool/internal/ruleManager"
 	"websocket-pool/pkg/request"
 
+	// grpcClient "git.im30.lan/mygroup/mind-service-define/client"
 	"go.uber.org/zap"
 )
 
@@ -62,6 +63,7 @@ func (b *BizTransfer) sendToBiz(trm entity.MessageEntity, uri string) {
 		global.GVA_LOG.Error("http request failed.", zap.Error(err), zap.Any("context", entity.GetContextKey(trm.BizContext)))
 		return
 	}
+	// grpcClient.WebsocketReceiveSync(&grpcClient.WebsocketReceiveRequest)
 
 	result := &entity.BizMessageEntity{}
 	err = json.Unmarshal(body, result)
